@@ -34,6 +34,7 @@ class VecM:
 class Node: 
     def __init__(self, x, y) -> None:
         self.coords = Vec2(x, y)
+        self.potential = 0
 
 class Edge:
     def __init__(self, start: str, end: str) -> None:
@@ -56,11 +57,14 @@ class Graph:
         self.targets.append(edge.end)
         # the coords of nodes are defined on a unit coordinate system (x and y from 0 to 1)
         # calculate the length of an edge via euclidean distance, scaled by 10 and converted to int 
-        cost: int = int(VecM.sub(self.nodes[edge.end].coords, self.nodes[edge.start].coords).len() * 10) 
+        cost: int = int(VecM.sub(self.nodes[edge.end].coords, self.nodes[edge.start].coords).len() * 50) 
         self.costs.append(cost)
 
     def add_node(self, name: str, node: Node):
         self.nodes[name] = node
+    
+    def compute_potentials(self):
+        pass
 
 class DrawHandler:
     def __init__(self, graph: Graph) -> None:
@@ -75,12 +79,17 @@ class DrawHandler:
         self.window.mainloop()
     
     def convert_to_image_coords(self, local: Vec2):
-        return Vec2(local.x * self.canvas_x, local.y * self.canvas_y)
+        return Vec2(local.x * self.canvas_x, self.canvas_y - local.y * self.canvas_y)
 
     def draw_graph(self):
         for name, node in self.graph.nodes.items():
             coords = self.convert_to_image_coords(node.coords)
-            self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size)
+            f_color = ""
+            if name == "s":
+                f_color = "red"
+            elif name == "t":
+                f_color = "green"
+            self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
             self.canvas.create_text(coords.x, coords.y, text=name)
         
         for idx, start in enumerate(self.graph.sources):
@@ -92,7 +101,7 @@ class DrawHandler:
             line = VecM.sub(self.graph.nodes[end].coords, self.graph.nodes[start].coords) 
             angle = VecM.full_angle(ref_line, line)
             x_offset = math.cos(angle) * self.node_size
-            y_offset = math.sin(angle) * self.node_size
+            y_offset = -math.sin(angle) * self.node_size
             self.canvas.create_line(coord_start.x + x_offset, coord_start.y + y_offset, coord_end.x - x_offset, coord_end.y - y_offset, arrow=tk.LAST)
             
             # attach the cost as text, after 20% of the line (closer to start vertex)
@@ -100,25 +109,79 @@ class DrawHandler:
             part_angle = VecM.half_angle(ref_line, line)
             orientation_offset_x = math.sin(part_angle) * 10
             orientation_offset_y = math.cos(part_angle) * 10
-            line_offset = self.convert_to_image_coords(Vec2(line.x * 0.3, line.y * 0.3))
+            line_offset = Vec2(self.canvas_x * line.x * 0.3, -self.canvas_y * line.y * 0.3)
             offset = Vec2(line_offset.x + orientation_offset_x, line_offset.y + orientation_offset_y)
             self.canvas.create_text(coord_start.x + offset.x, coord_start.y + offset.y, text=cost)
 
-graph = Graph()
+def initialize_demo_graph():
+    graph = Graph()
+    graph.add_node("0", Node(0.1, 0.65))
+    graph.add_node("1", Node(0.2, 0.75))
+    graph.add_node("2", Node(0.2, 0.5))
+    graph.add_node("3", Node(0.3, 0.9))
+    graph.add_node("4", Node(0.3, 0.8))
+    graph.add_node("5", Node(0.4, 0.9))
+    graph.add_node("6", Node(0.4, 0.75))
+    graph.add_node("7", Node(0.6, 0.8))
+    graph.add_node("8", Node(0.5, 0.6))
+    graph.add_node("9", Node(0.65, 0.65))
+    graph.add_node("10", Node(0.35, 0.45))
+    graph.add_node("11", Node(0.5, 0.4))
+    graph.add_node("12", Node(0.25, 0.3))
+    graph.add_node("13", Node(0.6, 0.3))
+    graph.add_node("14", Node(0.7, 0.5))
+    graph.add_node("15", Node(0.4, 0.2))
+    graph.add_node("s", Node(0.3, 0.65))
+    graph.add_node("t", Node(0.8, 0.2))
 
-graph.add_node("0", Node(0.1, 0.1))
-graph.add_node("1", Node(0.65, 0.2))
-graph.add_node("2", Node(0.22, 0.58))
-graph.add_node("3", Node(0.86, 0.52))
+    graph.add_edge(Edge("0","1"))
+    graph.add_edge(Edge("1","4"))
+    graph.add_edge(Edge("1","3"))
+    graph.add_edge(Edge("1","2"))
+    graph.add_edge(Edge("2","0"))
+    graph.add_edge(Edge("2","12"))
+    graph.add_edge(Edge("3","5"))
+    graph.add_edge(Edge("4","3"))
+    graph.add_edge(Edge("4","6"))
+    graph.add_edge(Edge("6","5"))
+    graph.add_edge(Edge("6","7"))
+    graph.add_edge(Edge("6","8"))
+    graph.add_edge(Edge("7","9"))
+    graph.add_edge(Edge("8","14"))
+    graph.add_edge(Edge("8","11"))
+    graph.add_edge(Edge("9","8"))
+    graph.add_edge(Edge("11","10"))
+    graph.add_edge(Edge("11","13"))
+    graph.add_edge(Edge("12","15"))
+    graph.add_edge(Edge("12","11"))
+    graph.add_edge(Edge("12","10"))
+    graph.add_edge(Edge("13","14"))
+    graph.add_edge(Edge("13","t"))
+    graph.add_edge(Edge("14","t"))
+    graph.add_edge(Edge("15","13"))
+    graph.add_edge(Edge("s","1"))
+    graph.add_edge(Edge("s","4"))
+    graph.add_edge(Edge("s","8"))
+    graph.add_edge(Edge("s","10"))
+    graph.add_edge(Edge("s","2"))
+    graph.add_edge(Edge("s","6"))
+    return graph
 
-# graph.add_node("0", Node(0.5, 0.6))
-# graph.add_node("1", Node(0.5, 0.4))
+# graph.add_node("0", Node(0.1, 0.1))
+# graph.add_node("1", Node(0.65, 0.2))
+# graph.add_node("2", Node(0.22, 0.58))
+# graph.add_node("3", Node(0.86, 0.52))
+
+# # graph.add_node("0", Node(0.5, 0.6))
+# # graph.add_node("1", Node(0.5, 0.4))
+# # graph.add_edge(Edge("0", "1"))
+
 # graph.add_edge(Edge("0", "1"))
+# graph.add_edge(Edge("1", "2"))
+# graph.add_edge(Edge("1", "3"))
+# graph.add_edge(Edge("2", "1"))
+# graph.add_edge(Edge("3", "0"))
 
-graph.add_edge(Edge("0", "1"))
-graph.add_edge(Edge("1", "2"))
-graph.add_edge(Edge("1", "3"))
-graph.add_edge(Edge("2", "1"))
-graph.add_edge(Edge("3", "0"))
+graph = initialize_demo_graph()
 
 dh = DrawHandler(graph)
