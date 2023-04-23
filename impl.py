@@ -73,12 +73,6 @@ class DrawHandler:
         self.canvas.pack()
         self.draw_graph()
         self.window.mainloop()
-        # self.l: float = math.sqrt((self.canvas_x * self.canvas_y) / len(self.graph.sources))
-        # self.displacements: list[Vec2] = []
-        # for v in graph.offsets:
-        #     self.displacements.append(Vec2(0, 0))
-
-        # self.layout()
     
     def convert_to_image_coords(self, local: Vec2):
         return Vec2(local.x * self.canvas_x, local.y * self.canvas_y)
@@ -109,36 +103,6 @@ class DrawHandler:
             line_offset = self.convert_to_image_coords(Vec2(line.x * 0.3, line.y * 0.3))
             offset = Vec2(line_offset.x + orientation_offset_x, line_offset.y + orientation_offset_y)
             self.canvas.create_text(coord_start.x + offset.x, coord_start.y + offset.y, text=cost)
-
-    # fruchterman reingold graph layouting stub, not used 
-
-    # def layout(self):
-    #     for it in range(30):
-    #         self.fdl(graph, it)
-
-    # def cool(self, iteration):
-    #     maxCool = 2
-    #     coolProgress = iteration / 1200.0
-    #     coolProgress = math.abs(math.pow(10, -coolProgress) - 0.1)
-    #     return coolProgress * maxCool
-
-    # def fr(self, d):
-    #     if d == 0:
-    #         return 0
-    #     return math.abs(-(self.l ** 2) / d)
-
-    # def fa(self, d):
-    #     return math.abs((d ** 2) / self.l)
-
-    # def fdl(self):
-    #     iteration = self.cool(iteration)
-    #     for v, _ in enumerate(self.graph.offsets):
-    #         self.displacements[v] = Vec2(0, 0)
-    #         for u, _ in enumerate(self.graph.offsets):
-    #             if u != v:
-    #                 delta: Vec2 = sub(u, v)
-    #                 deltaLength: float = v_length(delta)
-    #                 self.displacements[v]
 
 graph = Graph()
 
