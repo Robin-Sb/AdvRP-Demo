@@ -79,7 +79,7 @@ class Graph:
         self.offsets.append(0)
 
     def compute_euclidean_potential(self, coords: Vec2):
-        return int(VecM.sub(coords, self.nodes.get("t").coords).len() * self.scale_factor)
+        return math.ceil(VecM.sub(coords, self.nodes.get("t").coords).len() * self.scale_factor)
     
     def compute_potentials(self):
         self.updated_costs = self.costs.copy()
@@ -152,10 +152,12 @@ class DrawHandler:
     def init_sequence(self):
         self.sequence: list[Step] = []
         self.current_step = 0
-        first_step: Step = Step(self.draw_costs, self.remove_cost_elements)
-        second_step: Step = Step(self.draw_updated_costs, self.remove_updated_cost_elements)
-        self.sequence.append(first_step)
-        self.sequence.append(second_step)
+        cost_step: Step = Step(self.draw_costs, self.remove_cost_elements)
+        potential_step: Step = Step(self.draw_potentials, self.remove_potential_elements)
+        updated_cost_step: Step = Step(self.draw_updated_costs, self.remove_updated_cost_elements)
+        self.sequence.append(cost_step)
+        self.sequence.append(potential_step)
+        self.sequence.append(updated_cost_step)
 
     def fwd_event(self, event):
         self.current_step = min(self.current_step, len(self.sequence) - 1)
@@ -192,9 +194,6 @@ class DrawHandler:
                 f_color = "yellow"
             self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
             self.canvas.create_text(coords.x, coords.y, text=name)
-            # add potential drawing
-            potential_elements = self.canvas.create_text(coords.x, coords.y + 10, fill="blue", text=node.potential)
-            self.potential_elements.append(potential_elements)
 
     def calc_angle(self, u: Vec2, v: Vec2, half: bool):
         ref_line = Vec2(1, 0)
@@ -231,6 +230,15 @@ class DrawHandler:
             offset = Vec2(line_offset.x + orientation_offset_x, line_offset.y + orientation_offset_y)
         
         return self.canvas.create_text(coord_start.x + offset.x, coord_start.y + offset.y, text=cost, fill=color)
+
+
+    def draw_potentials(self):
+        # add potential drawing
+        for _, node in self.graph.nodes.items():
+            coords = self.convert_to_image_coords(node.coords)
+            potential_elements = self.canvas.create_text(coords.x, coords.y + 10, fill="blue", text=node.potential)
+            self.potential_elements.append(potential_elements)
+
 
     def draw_costs(self):
         for idx, start in enumerate(self.graph.sources):
