@@ -2,7 +2,6 @@ import tkinter as tk
 import math
 from enum import Enum
 import heapq
-from queue import PriorityQueue
 import numpy as np
 
 class Vec2:
@@ -82,6 +81,60 @@ class Graph:
         node.append_idx(idx)
         self.nodes[name] = node
 
+    def init_demo_graph(self):
+        self.add_node("s", Node(0.3, 0.65))
+        self.add_node("A", Node(0.1, 0.65))    #0
+        self.add_node("B", Node(0.2, 0.75))    #1
+        self.add_node("C", Node(0.2, 0.5))     #2
+        self.add_node("D", Node(0.3, 0.9))     #3  
+        self.add_node("E", Node(0.3, 0.8))     #4
+        self.add_node("F", Node(0.4, 0.9))     #5
+        self.add_node("G", Node(0.4, 0.75))    #6 
+        self.add_node("H", Node(0.6, 0.8))     #7
+        self.add_node("I", Node(0.5, 0.6))     #8
+        self.add_node("J", Node(0.65, 0.65))   #9
+        self.add_node("K", Node(0.35, 0.45))   #10
+        self.add_node("L", Node(0.5, 0.4))     #11
+        self.add_node("M", Node(0.25, 0.3))    #12 
+        self.add_node("N", Node(0.6, 0.3))     #13
+        self.add_node("O", Node(0.7, 0.5))     #14
+        self.add_node("P", Node(0.4, 0.2))     #15
+        self.add_node("t", Node(0.8, 0.2))
+
+        self.add_edge(Edge("s","B"))
+        self.add_edge(Edge("s","E"))
+        self.add_edge(Edge("s","I"))
+        self.add_edge(Edge("s","K"))
+        self.add_edge(Edge("s","C"))
+        self.add_edge(Edge("s","G"))
+        self.add_edge(Edge("A","B"))
+        self.add_edge(Edge("B","E"))
+        self.add_edge(Edge("B","D"))
+        self.add_edge(Edge("B","C"))
+        self.add_edge(Edge("C","A"))
+        self.add_edge(Edge("C","M"))
+        self.add_edge(Edge("D","F"))
+        self.add_edge(Edge("E","D"))
+        self.add_edge(Edge("E","G"))
+        self.add_edge(Edge("G","F"))
+        self.add_edge(Edge("G","H"))
+        self.add_edge(Edge("G","I"))
+        self.add_edge(Edge("H","J"))
+        self.add_edge(Edge("I","O"))
+        self.add_edge(Edge("I","L"))
+        self.add_edge(Edge("J","I"))
+        self.add_edge(Edge("L","K"))
+        self.add_edge(Edge("L","N"))
+        self.add_edge(Edge("M","P"))
+        self.add_edge(Edge("M","L"))
+        self.add_edge(Edge("M","K"))
+        self.add_edge(Edge("N","O"))
+        self.add_edge(Edge("N","t"))
+        self.add_edge(Edge("O","t"))
+        self.add_edge(Edge("P","N"))
+
+        self.add_offset()
+
     def add_offset(self):
         offsets = np.zeros(len(self.nodes), dtype=np.int32)
         edge_index = 0 
@@ -114,35 +167,6 @@ class Graph:
                 target_potential = self.compute_euclidean_potential(target.coords)
                 self.updated_costs[edge_idx] = cost + target_potential - source_potential
     
-    def dijkstra(self):
-        dist = np.full(len(self.nodes), np.Infinity)
-        parent = np.full(len(self.nodes), None)
-        dist[self.nodes.get("s").idx] = 0
-        queue = []
-        heapq.heapify(queue)
-        heapq.heappush(queue, (0, self.nodes.get("s")))
-        while not heapq.empty():
-            node: Node = heapq.heappop(queue)[1]
-            node_idx = node.idx
-            node.state = NodeState.SCANNED
-            start_offset = self.offsets[node_idx]
-            try:
-                end_offset = self.offsets[node_idx + 1]
-            except:
-                end_offset = len(self.sources)
-            edges = self.targets[start_offset:end_offset]
-            for idx, end_node in enumerate(edges):
-                target = self.nodes.get(end_node)
-                if target.state == NodeState.SCANNED:
-                    continue
-                target.state = NodeState.LABELED
-                target_idx = target.idx
-                d = dist[node_idx] + self.updated_costs[start_offset + idx]
-                if dist[target_idx] >= d:
-                    dist[target_idx] = d
-                    parent[target_idx] = node_idx
-                    heapq.heappush(queue, (dist[target_idx], target))
-
 class StateType(Enum):
     OUTER = 1
     INNER = 2
@@ -167,7 +191,7 @@ class IterativeDijkstra:
     def __init__(self, graph: Graph, costs: list[int]) -> None:
         self.graph = graph
         self.costs = costs
-        self.dist = np.full(len(self.graph.nodes), np.Infinity)
+        self.dist = np.full(len(self.graph.nodes), float("inf"))
         self.parent = np.full(len(self.graph.nodes), None)
         start_node = self.graph.nodes.get("s")
         self.dist[start_node.idx] = 0
@@ -201,7 +225,7 @@ class IterativeDijkstra:
         start_offset = self.graph.offsets[self.state.node.idx]
         target.state = NodeState.LABELED
         target_idx = target.idx
-        d = self.dist[self.state.node.idx] + self.graph.updated_costs[start_offset + self.state.edge_idx]
+        d = self.dist[self.state.node.idx] + self.costs[start_offset + self.state.edge_idx]
         if self.dist[target_idx] >= d:
             self.dist[target_idx] = d
             self.parent[target_idx] = self.state.node.idx
@@ -219,31 +243,62 @@ class IterativeDijkstra:
             self.inner_loop()
         if self.graph.nodes.get("t").state == NodeState.SCANNED:
             self.finished = True
-class Step:
-    def __init__(self, fwd, bwd) -> None:
-        self.forward = fwd
-        self.backward = bwd
+    
+# class Step:
+#     def __init__(self, fwd, bwd) -> None:
+#         self.forward = fwd
+#         self.backward = bwd
 
 class DrawHandler:
-    def __init__(self, graph: Graph) -> None:
-        self.graph: Graph = graph
-        self.graph.compute_potentials()
-        self.it_dijkstra = IterativeDijkstra(graph, graph.updated_costs)
+    def __init__(self) -> None:
         self.window = tk.Tk()
-        self.canvas_x: int = 1000
-        self.canvas_y: int = 1000
+        self.canvas_x: int = 900
+        self.canvas_y: int = 900
         self.node_size = 15
         self.canvas = tk.Canvas(self.window, width=self.canvas_x, height=self.canvas_y)
         self.canvas.pack()
         self.init_sequence()
         self.window.bind("<Right>", self.fwd_event)
+        b1 = tk.Button(self.window, text = "Dijkstra", command=self.start_dijkstra)
+        b2 = tk.Button(self.window, text = "A*", command=self.start_a_star)
+        b1.pack()
+        b2.pack()
         self.cost_elements = []
         self.updated_cost_elements = []
         self.potential_elements = []
         self.node_elements = []
         self.node_name_elements = []
+        self.edge_elements = []
+        self.dist_elements = []
+        self.reset_graph()
+        self.it_dijkstra = IterativeDijkstra(self.graph, self.graph.costs)
         self.draw_graph()
         self.window.mainloop()
+
+    def reset_graph(self):
+        self.graph: Graph = Graph()
+        self.graph.init_demo_graph()
+        self.graph.compute_potentials()
+
+    def init_algo(self, costs):
+        self.reset_graph()
+        self.redraw_graph()
+        self.init_sequence()
+        self.it_dijkstra = IterativeDijkstra(self.graph, costs)
+
+    def start_a_star(self):
+        self.init_algo(self.graph.updated_costs)
+
+    def start_dijkstra(self):
+        self.init_algo(self.graph.costs)
+
+    def redraw_graph(self):
+        self.remove_cost_elements()
+        self.remove_node_drawing()
+        self.remove_potential_elements()
+        self.remove_updated_cost_elements()
+        self.remove_edge_elements()
+        self.draw_graph()
 
     def init_sequence(self):
         self.sequence = []
@@ -265,13 +320,20 @@ class DrawHandler:
 
     def redraw_nodes(self):
         self.remove_node_drawing()
+        self.remove_dist_labels()
         self.draw_nodes()
+
+    def remove_dist_labels(self):
+        for dist_element in self.dist_elements:
+            self.canvas.delete(dist_element)
 
     def remove_node_drawing(self):
         for node_element in self.node_elements:
             self.canvas.delete(node_element)
         for name_element in self.node_name_elements:
             self.canvas.delete(name_element)
+        self.node_elements = []
+        self.node_name_elements = []
         
     def remove_cost_elements(self):
         for cost_element in self.cost_elements:
@@ -287,6 +349,11 @@ class DrawHandler:
         for potential_element in self.potential_elements:
             self.canvas.delete(potential_element)
         self.potential_elements = []
+    
+    def remove_edge_elements(self):
+        for edge_element in self.edge_elements:
+            self.canvas.delete(edge_element)
+        self.edge_elements = []
 
     def convert_to_image_coords(self, local: Vec2):
         return Vec2(local.x * self.canvas_x, self.canvas_y - local.y * self.canvas_y)
@@ -305,6 +372,8 @@ class DrawHandler:
                 f_color = "magenta"
             node_elem = self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
             self.node_elements.append(node_elem)
+            dist_element = self.canvas.create_text(coords.x - 25, coords.y, text = str(self.it_dijkstra.dist[node.idx]), font=('Helvetica 10 bold'))
+            self.dist_elements.append(dist_element)
             node_text = self.canvas.create_text(coords.x, coords.y, text=name)
             self.node_name_elements.append(node_text)
 
@@ -324,7 +393,8 @@ class DrawHandler:
         angle = self.calc_angle(u, v, False) 
         x_offset = math.cos(angle) * self.node_size
         y_offset = -math.sin(angle) * self.node_size
-        self.canvas.create_line(coord_start.x + x_offset, coord_start.y + y_offset, coord_end.x - x_offset, coord_end.y - y_offset, arrow=tk.LAST)
+        line = self.canvas.create_line(coord_start.x + x_offset, coord_start.y + y_offset, coord_end.x - x_offset, coord_end.y - y_offset, arrow=tk.LAST)
+        self.edge_elements.append(line)
 
     def draw_edge_cost(self, u: Vec2, v: Vec2, idx: int, updated: bool):
         coord_start = self.convert_to_image_coords(u)
@@ -332,7 +402,7 @@ class DrawHandler:
         angle = self.calc_angle(u, v, True)
         orientation_offset_x = math.sin(angle) * 10
         orientation_offset_y = math.cos(angle) * 10
-        line_offset = Vec2(self.canvas_x * line.x * 0.3, -self.canvas_y * line.y * 0.3)
+        line_offset = Vec2(self.canvas_x * line.x * 0.5, -self.canvas_y * line.y * 0.5)
         if updated:
             color = "red"
             cost = self.graph.updated_costs[idx]
@@ -343,7 +413,6 @@ class DrawHandler:
             offset = Vec2(line_offset.x + orientation_offset_x, line_offset.y + orientation_offset_y)
         
         return self.canvas.create_text(coord_start.x + offset.x, coord_start.y + offset.y, text=cost, fill=color)
-
 
     def draw_potentials(self):
         # add potential drawing
@@ -381,63 +450,4 @@ class DrawHandler:
         self.draw_nodes()
         self.draw_edges()
 
-def initialize_demo_graph():
-    graph = Graph()
-    graph.add_node("s", Node(0.3, 0.65))
-    graph.add_node("A", Node(0.1, 0.65))    #0
-    graph.add_node("B", Node(0.2, 0.75))    #1
-    graph.add_node("C", Node(0.2, 0.5))     #2
-    graph.add_node("D", Node(0.3, 0.9))     #3  
-    graph.add_node("E", Node(0.3, 0.8))     #4
-    graph.add_node("F", Node(0.4, 0.9))     #5
-    graph.add_node("G", Node(0.4, 0.75))    #6 
-    graph.add_node("H", Node(0.6, 0.8))     #7
-    graph.add_node("I", Node(0.5, 0.6))     #8
-    graph.add_node("J", Node(0.65, 0.65))   #9
-    graph.add_node("K", Node(0.35, 0.45))   #10
-    graph.add_node("L", Node(0.5, 0.4))     #11
-    graph.add_node("M", Node(0.25, 0.3))    #12 
-    graph.add_node("N", Node(0.6, 0.3))     #13
-    graph.add_node("O", Node(0.7, 0.5))     #14
-    graph.add_node("P", Node(0.4, 0.2))     #15
-    graph.add_node("t", Node(0.8, 0.2))
-
-    graph.add_edge(Edge("s","B"))
-    graph.add_edge(Edge("s","E"))
-    graph.add_edge(Edge("s","I"))
-    graph.add_edge(Edge("s","K"))
-    graph.add_edge(Edge("s","C"))
-    graph.add_edge(Edge("s","G"))
-    graph.add_edge(Edge("A","B"))
-    graph.add_edge(Edge("B","E"))
-    graph.add_edge(Edge("B","D"))
-    graph.add_edge(Edge("B","C"))
-    graph.add_edge(Edge("C","A"))
-    graph.add_edge(Edge("C","M"))
-    graph.add_edge(Edge("D","F"))
-    graph.add_edge(Edge("E","D"))
-    graph.add_edge(Edge("E","G"))
-    graph.add_edge(Edge("G","F"))
-    graph.add_edge(Edge("G","H"))
-    graph.add_edge(Edge("G","I"))
-    graph.add_edge(Edge("H","J"))
-    graph.add_edge(Edge("I","O"))
-    graph.add_edge(Edge("I","L"))
-    graph.add_edge(Edge("J","I"))
-    graph.add_edge(Edge("L","K"))
-    graph.add_edge(Edge("L","N"))
-    graph.add_edge(Edge("M","P"))
-    graph.add_edge(Edge("M","L"))
-    graph.add_edge(Edge("M","K"))
-    graph.add_edge(Edge("N","O"))
-    graph.add_edge(Edge("N","t"))
-    graph.add_edge(Edge("O","t"))
-    graph.add_edge(Edge("P","N"))
-
-    graph.add_offset()
-
-    return graph
-
-graph = initialize_demo_graph()
-
-dh = DrawHandler(graph)
+dh = DrawHandler()
