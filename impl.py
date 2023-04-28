@@ -1,7 +1,9 @@
 import tkinter as tk
 import math
 from enum import Enum
+import heapq
 from queue import PriorityQueue
+import numpy as np
 
 class Vec2:
     def __init__(self, x, y) -> None:
@@ -45,6 +47,12 @@ class Node:
     
     def append_idx(self, idx) -> None:
         self.idx = idx
+    
+    def __lt__(self, other):
+        return self.idx < other.idx
+
+    def __le__(self, other):
+        return self.idx <= other.idx
 
 class Edge:
     def __init__(self, start: str, end: str) -> None:
@@ -63,8 +71,8 @@ class Graph:
         self.scale_factor = 50
 
     def add_edge(self, edge: Edge) -> None:
-        if not self.sources or (edge.start != self.sources[-1]):
-            self.offsets[self.nodes.get(edge.start).idx] = len(self.sources)
+        # if not self.sources or (edge.start != self.sources[-1]):
+        #     self.offsets[self.nodes.get(edge.start).idx] = len(self.sources)
         self.sources.append(edge.start)
         self.targets.append(edge.end)
         # the coords of nodes are defined on a unit coordinate system (x and y from 0 to 1)
@@ -76,7 +84,17 @@ class Graph:
         idx = len(self.nodes)
         node.append_idx(idx)
         self.nodes[name] = node
-        self.offsets.append(0)
+        # self.offsets.append(0)
+
+    def add_offset(self):
+        offsets = np.zeros(len(self.nodes), dtype=np.int32)
+        edge_index = 0 
+        for name, node in self.nodes.items():
+            offsets[node.idx] = edge_index
+            while edge_index < len(self.sources) and name == self.sources[edge_index]:
+                edge_index += 1
+
+        self.offsets = list(offsets)
 
     def compute_euclidean_potential(self, coords: Vec2):
         return math.ceil(VecM.sub(coords, self.nodes.get("t").coords).len() * self.scale_factor)
@@ -92,38 +110,143 @@ class Graph:
             else:
                 end_offset = len(self.sources) 
 
-            for edge_idx, cost in enumerate(self.costs[start_offset:end_offset]):
+            for local_idx, cost in enumerate(self.costs[start_offset:end_offset]):
+                edge_idx = start_offset + local_idx
                 source: Node = self.nodes.get(self.sources[edge_idx])
                 target: Node = self.nodes.get(self.targets[edge_idx])
                 source_potential = self.compute_euclidean_potential(source.coords)
                 target_potential = self.compute_euclidean_potential(target.coords)
                 self.updated_costs[edge_idx] = cost + target_potential - source_potential
     
-    def a_star(self):
-        openlist = PriorityQueue()
-        closedlist = set()
-        # initialize start element
-        openlist.put(0, self.nodes.get("s"))
-        while openlist:
-            currentNode: Node = openlist.get()
-            if currentNode == self.nodes.get("t"):
-                return path
-            closedlist.add(currentNode)
-        self.expandNode(currentNode)
+    def dijkstra(self):
+        dist = np.full(len(self.nodes), np.Infinity)
+        parent = np.full(len(self.nodes), None)
+        dist[self.nodes.get("s").idx] = 0
+        queue = []
+        heapq.heapify(queue)
+        heapq.heappush(queue, (0, self.nodes.get("s")))
+        while not heapq.empty():
+            node: Node = heapq.heappop(queue)[1]
+            node_idx = node.idx
+            node.state = NodeState.SCANNED
+            start_offset = self.offsets[node_idx]
+            try:
+                end_offset = self.offsets[node_idx + 1]
+            except:
+                end_offset = len(self.sources)
+            edges = self.targets[start_offset:end_offset]
+            for idx, end_node in enumerate(edges):
+                target = self.nodes.get(end_node)
+                if target.state == NodeState.SCANNED:
+                    continue
+                target.state = NodeState.LABELED
+                target_idx = target.idx
+                d = dist[node_idx] + self.updated_costs[start_offset + idx]
+                if dist[target_idx] >= d:
+                    dist[target_idx] = d
+                    parent[target_idx] = node_idx
+                    heapq.heappush(queue, (dist[target_idx], target))
 
-    def expandNode(self, currentNode: Node, openlist: PriorityQueue, closedlist: set):
-        idx: int = currentNode.idx
-        start_offset: int = self.offsets[idx]
-        if self.offsets[idx + 1]:
-            end_offset = self.offsets[idx + 1]
+class StateType(Enum):
+    OUTER = 1
+    INNER = 2
+
+class AlgState:
+    def __init__(self, node: Node) -> None:
+        self.state_type = StateType.OUTER
+        self.node = node
+        self.edges: list[str] = []
+        self.edge_idx:int = 0
+
+    def reset(self, state_type: StateType, node: Node, edges: list[str], edge_idx: int):
+        self.state_type = state_type
+        self.node = node
+        self.edges = edges
+        self.edge_idx = edge_idx
+
+    def increment(self):
+        self.edge_idx += 1
+
+class IterativeDijkstra:
+    def __init__(self, graph: Graph, costs: list[int]) -> None:
+        self.graph = graph
+        self.costs = costs
+        self.dist = np.full(len(self.graph.nodes), np.Infinity)
+        self.parent = np.full(len(self.graph.nodes), None)
+        start_node = self.graph.nodes.get("s")
+        self.dist[start_node.idx] = 0
+        self.queue = []
+        heapq.heapify(self.queue)
+        heapq.heappush(self.queue, (0, start_node))
+        self.state = AlgState(start_node)
+
+    def outer_loop(self):
+        if len(self.queue) > 0:
+            node: Node = heapq.heappop(self.queue)[1]
+            node_idx: int = node.idx
+            node.state = NodeState.SCANNED
+            start_offset = self.graph.offsets[node_idx]
+            try:
+                end_offset = self.graph.offsets[node_idx + 1]
+            except:
+                end_offset = len(self.graph.sources)
+            edges = self.graph.targets[start_offset:end_offset]
+            self.state.reset(StateType.INNER, node, edges, 0)
+
+    def inner_loop(self):
+        end_node = self.state.edges[self.state.edge_idx]
+        target = self.graph.nodes.get(end_node)
+        if target.state == NodeState.SCANNED:
+            self.state.increment()
+            self.single_step()
+            return
+        start_offset = self.graph.offsets[self.state.node.idx]
+        target.state = NodeState.LABELED
+        target_idx = target.idx
+        d = self.dist[self.state.node.idx] + self.graph.updated_costs[start_offset + self.state.edge_idx]
+        if self.dist[target_idx] >= d:
+            self.dist[target_idx] = d
+            self.parent[target_idx] = self.state.node.idx
+            heapq.heappush(self.queue, (self.dist[target_idx], target))
+        self.state.increment()
+        # if self.state.edge_idx >= len(self.state.edges):
+        #     self.state.reset(StateType.OUTER, target, [], 0)
+
+    def single_step(self):
+        if self.state.edge_idx >= len(self.state.edges):
+            self.state.reset(StateType.OUTER, self.state.node, [], 0)
+        if self.state.state_type == StateType.OUTER:
+            self.outer_loop()
         else:
-            end_offset = len(self.sources) 
-        outgoing_edges = self.targets[start_offset:end_offset]
-        for node_name in outgoing_edges:
-            node = self.nodes.get(node_name)
-            if closedlist[node]:
-                continue
-            node.state = NodeState.LABELED
+            self.inner_loop()
+
+    def dijkstra(self):
+        #dist = np.full(len(self.graph.nodes), np.Infinity)
+        #parent = np.full(len(self.graph.nodes), None)
+        #dist[self.graph.nodes.get("s").idx] = 0
+        # heapq.heapify(queue)
+        # heapq.heappush(queue, (0, self.graph.nodes.get("s")))
+        while not heapq.empty():
+            node: Node = heapq.heappop(queue)[1]
+            node_idx = node.idx
+            node.state = NodeState.SCANNED
+            start_offset = self.graph.offsets[node_idx]
+            try:
+                end_offset = self.graph.offsets[node_idx + 1]
+            except:
+                end_offset = len(self.graph.sources)
+            edges = self.graph.targets[start_offset:end_offset]
+            for idx, end_node in enumerate(edges):
+                target = self.graph.nodes.get(end_node)
+                if target.state == NodeState.SCANNED:
+                    continue
+                target.state = NodeState.LABELED
+                target_idx = target.idx
+                d = dist[node_idx] + self.graph.updated_costs[start_offset + idx]
+                if dist[target_idx] >= d:
+                    dist[target_idx] = d
+                    parent[target_idx] = node_idx
+                    heapq.heappush(queue, (dist[target_idx], target))
 
 class Step:
     def __init__(self, fwd, bwd) -> None:
@@ -134,9 +257,11 @@ class DrawHandler:
     def __init__(self, graph: Graph) -> None:
         self.graph: Graph = graph
         self.graph.compute_potentials()
+        self.it_dijkstra = IterativeDijkstra(graph, graph.updated_costs)
+        #self.graph.dijkstra()
         self.window = tk.Tk()
-        self.canvas_x: int = 800
-        self.canvas_y: int = 800
+        self.canvas_x: int = 1000
+        self.canvas_y: int = 1000
         self.node_size = 15
         self.canvas = tk.Canvas(self.window, width=self.canvas_x, height=self.canvas_y)
         self.canvas.pack()
@@ -146,6 +271,8 @@ class DrawHandler:
         self.cost_elements = []
         self.updated_cost_elements = []
         self.potential_elements = []
+        self.node_elements = []
+        self.node_name_elements = []
         self.draw_graph()
         self.window.mainloop()
 
@@ -162,12 +289,28 @@ class DrawHandler:
     def fwd_event(self, event):
         self.current_step = min(self.current_step, len(self.sequence) - 1)
         self.sequence[self.current_step].forward()
+        if self.current_step >= len(self.sequence) - 1:
+            self.sequence.append(Step(self.single_step_dijkstra, None))
         self.current_step = min(self.current_step + 1, len(self.sequence))
     
     def bwd_event(self, event):
         self.current_step = max(0, self.current_step - 1)
         self.sequence[self.current_step].backward()
 
+    def single_step_dijkstra(self):
+        self.it_dijkstra.single_step()
+        self.redraw_nodes()
+
+    def redraw_nodes(self):
+        self.remove_node_drawing()
+        self.draw_nodes()
+
+    def remove_node_drawing(self):
+        for node_element in self.node_elements:
+            self.canvas.delete(node_element)
+        for name_element in self.node_name_elements:
+            self.canvas.delete(name_element)
+        
     def remove_cost_elements(self):
         for cost_element in self.cost_elements:
             self.canvas.delete(cost_element)
@@ -190,10 +333,18 @@ class DrawHandler:
         for name, node in self.graph.nodes.items():
             coords = self.convert_to_image_coords(node.coords)
             f_color = ""
+            if node.state == NodeState.LABELED:
+                f_color = "cyan"
+            elif node.state == NodeState.SCANNED:
+                f_color = "magenta"
             if name == "s" or name == "t":
                 f_color = "yellow"
-            self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
-            self.canvas.create_text(coords.x, coords.y, text=name)
+            if self.it_dijkstra.state.node == node:
+                f_color = "green"
+            node_elem = self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
+            self.node_elements.append(node_elem)
+            node_text = self.canvas.create_text(coords.x, coords.y, text=name)
+            self.node_name_elements.append(node_text)
 
     def calc_angle(self, u: Vec2, v: Vec2, half: bool):
         ref_line = Vec2(1, 0)
@@ -239,7 +390,6 @@ class DrawHandler:
             potential_elements = self.canvas.create_text(coords.x, coords.y + 10, fill="blue", text=node.potential)
             self.potential_elements.append(potential_elements)
 
-
     def draw_costs(self):
         for idx, start in enumerate(self.graph.sources):
             end = self.graph.targets[idx]
@@ -258,13 +408,12 @@ class DrawHandler:
             text_element = self.draw_edge_cost(u, v, idx, True)
             self.updated_cost_elements.append(text_element)
 
-
     def draw_edges(self):
         for idx, start in enumerate(self.graph.sources):
             end = self.graph.targets[idx]
             u = self.graph.nodes[start].coords
             v = self.graph.nodes[end].coords
-            self.draw_edge_line(u, v)        
+            self.draw_edge_line(u, v)
 
     def draw_graph(self):
         self.draw_nodes()
@@ -322,6 +471,8 @@ def initialize_demo_graph():
     graph.add_edge(Edge("N","t"))
     graph.add_edge(Edge("O","t"))
     graph.add_edge(Edge("P","N"))
+
+    graph.add_offset()
 
     return graph
 
