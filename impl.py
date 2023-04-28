@@ -58,7 +58,6 @@ class Edge:
     def __init__(self, start: str, end: str) -> None:
         self.start = start
         self.end = end
-        #self.cost = cost
 
 class Graph:
     def __init__(self) -> None:
@@ -71,8 +70,6 @@ class Graph:
         self.scale_factor = 50
 
     def add_edge(self, edge: Edge) -> None:
-        # if not self.sources or (edge.start != self.sources[-1]):
-        #     self.offsets[self.nodes.get(edge.start).idx] = len(self.sources)
         self.sources.append(edge.start)
         self.targets.append(edge.end)
         # the coords of nodes are defined on a unit coordinate system (x and y from 0 to 1)
@@ -84,7 +81,6 @@ class Graph:
         idx = len(self.nodes)
         node.append_idx(idx)
         self.nodes[name] = node
-        # self.offsets.append(0)
 
     def add_offset(self):
         offsets = np.zeros(len(self.nodes), dtype=np.int32)
@@ -179,6 +175,7 @@ class IterativeDijkstra:
         heapq.heapify(self.queue)
         heapq.heappush(self.queue, (0, start_node))
         self.state = AlgState(start_node)
+        self.finished = False
 
     def outer_loop(self):
         if len(self.queue) > 0:
@@ -192,6 +189,7 @@ class IterativeDijkstra:
                 end_offset = len(self.graph.sources)
             edges = self.graph.targets[start_offset:end_offset]
             self.state.reset(StateType.INNER, node, edges, 0)
+        
 
     def inner_loop(self):
         end_node = self.state.edges[self.state.edge_idx]
@@ -209,45 +207,18 @@ class IterativeDijkstra:
             self.parent[target_idx] = self.state.node.idx
             heapq.heappush(self.queue, (self.dist[target_idx], target))
         self.state.increment()
-        # if self.state.edge_idx >= len(self.state.edges):
-        #     self.state.reset(StateType.OUTER, target, [], 0)
 
     def single_step(self):
+        if self.finished:
+            return
         if self.state.edge_idx >= len(self.state.edges):
             self.state.reset(StateType.OUTER, self.state.node, [], 0)
         if self.state.state_type == StateType.OUTER:
             self.outer_loop()
         else:
             self.inner_loop()
-
-    def dijkstra(self):
-        #dist = np.full(len(self.graph.nodes), np.Infinity)
-        #parent = np.full(len(self.graph.nodes), None)
-        #dist[self.graph.nodes.get("s").idx] = 0
-        # heapq.heapify(queue)
-        # heapq.heappush(queue, (0, self.graph.nodes.get("s")))
-        while not heapq.empty():
-            node: Node = heapq.heappop(queue)[1]
-            node_idx = node.idx
-            node.state = NodeState.SCANNED
-            start_offset = self.graph.offsets[node_idx]
-            try:
-                end_offset = self.graph.offsets[node_idx + 1]
-            except:
-                end_offset = len(self.graph.sources)
-            edges = self.graph.targets[start_offset:end_offset]
-            for idx, end_node in enumerate(edges):
-                target = self.graph.nodes.get(end_node)
-                if target.state == NodeState.SCANNED:
-                    continue
-                target.state = NodeState.LABELED
-                target_idx = target.idx
-                d = dist[node_idx] + self.graph.updated_costs[start_offset + idx]
-                if dist[target_idx] >= d:
-                    dist[target_idx] = d
-                    parent[target_idx] = node_idx
-                    heapq.heappush(queue, (dist[target_idx], target))
-
+        if self.graph.nodes.get("t").state == NodeState.SCANNED:
+            self.finished = True
 class Step:
     def __init__(self, fwd, bwd) -> None:
         self.forward = fwd
@@ -258,7 +229,6 @@ class DrawHandler:
         self.graph: Graph = graph
         self.graph.compute_potentials()
         self.it_dijkstra = IterativeDijkstra(graph, graph.updated_costs)
-        #self.graph.dijkstra()
         self.window = tk.Tk()
         self.canvas_x: int = 1000
         self.canvas_y: int = 1000
@@ -267,7 +237,6 @@ class DrawHandler:
         self.canvas.pack()
         self.init_sequence()
         self.window.bind("<Right>", self.fwd_event)
-        self.window.bind("<Left>", self.bwd_event)
         self.cost_elements = []
         self.updated_cost_elements = []
         self.potential_elements = []
@@ -277,26 +246,19 @@ class DrawHandler:
         self.window.mainloop()
 
     def init_sequence(self):
-        self.sequence: list[Step] = []
+        self.sequence = []
         self.current_step = 0
-        cost_step: Step = Step(self.draw_costs, self.remove_cost_elements)
-        potential_step: Step = Step(self.draw_potentials, self.remove_potential_elements)
-        updated_cost_step: Step = Step(self.draw_updated_costs, self.remove_updated_cost_elements)
-        self.sequence.append(cost_step)
-        self.sequence.append(potential_step)
-        self.sequence.append(updated_cost_step)
+        self.sequence.append(self.draw_costs)
+        self.sequence.append(self.draw_potentials)
+        self.sequence.append(self.draw_updated_costs)
 
     def fwd_event(self, event):
         self.current_step = min(self.current_step, len(self.sequence) - 1)
-        self.sequence[self.current_step].forward()
-        if self.current_step >= len(self.sequence) - 1:
-            self.sequence.append(Step(self.single_step_dijkstra, None))
+        self.sequence[self.current_step]()
+        if self.current_step >= len(self.sequence) - 1 and not self.it_dijkstra.finished:
+            self.sequence.append(self.single_step_dijkstra)
         self.current_step = min(self.current_step + 1, len(self.sequence))
     
-    def bwd_event(self, event):
-        self.current_step = max(0, self.current_step - 1)
-        self.sequence[self.current_step].backward()
-
     def single_step_dijkstra(self):
         self.it_dijkstra.single_step()
         self.redraw_nodes()
@@ -333,14 +295,14 @@ class DrawHandler:
         for name, node in self.graph.nodes.items():
             coords = self.convert_to_image_coords(node.coords)
             f_color = ""
-            if node.state == NodeState.LABELED:
-                f_color = "cyan"
-            elif node.state == NodeState.SCANNED:
-                f_color = "magenta"
             if name == "s" or name == "t":
                 f_color = "yellow"
             if self.it_dijkstra.state.node == node:
                 f_color = "green"
+            if node.state == NodeState.LABELED:
+                f_color = "cyan"
+            elif node.state == NodeState.SCANNED:
+                f_color = "magenta"
             node_elem = self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
             self.node_elements.append(node_elem)
             node_text = self.canvas.create_text(coords.x, coords.y, text=name)
