@@ -223,7 +223,6 @@ class Graph:
         landmark = self.nodes.get("Q")
         self.updated_costs = self.costs.copy()
         lm_dists = []
-        lm_dist = self.dijkstra(landmark)
         for name, node in self.nodes.items():
             dist = self.dijkstra(node)
             lm_dists.append(dist[landmark.idx])
@@ -340,9 +339,9 @@ class DrawHandler:
         b1 = tk.Button(self.window, text = "Dijkstra", command=self.start_dijkstra)
         b2 = tk.Button(self.window, text = "A* Distance", command=self.init_a_star_dist)
         b3  = tk.Button(self.window, text = "A* Landmark", command=self.init_a_star_lm)
-        b1.pack()
-        b2.pack()
-        b3.pack()
+        b1.grid(side=tk.LEFT)
+        b2.pack(side=tk.LEFT)
+        b3.pack(side=tk.LEFT)
         self.cost_elements = []
         self.updated_cost_elements = []
         self.potential_elements = []
@@ -351,22 +350,12 @@ class DrawHandler:
         self.edge_elements = []
         self.dist_elements = []
         self.start_dijkstra()
-        #self.reset_graph()
-        #self.graph.compute_landmarks()
-        #self.it_dijkstra = IterativeDijkstra(self.graph, self.graph.costs)
-        #self.draw_graph()
         self.window.mainloop()
 
     def reset_graph(self):
         self.graph: Graph = Graph()
         self.graph.init_demo_graph()
-
-    # def init_algo(self, costs):
-    #     self.reset_graph()
-    #     self.redraw_graph()
-    #     self.init_sequence()
-    #     self.it_dijkstra = IterativeDijkstra(self.graph, costs)
-
+    
     def init_a_star_dist(self):
         self.start_a_star(True)
 
