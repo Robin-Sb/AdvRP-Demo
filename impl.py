@@ -364,10 +364,10 @@ class DrawHandler:
             f_color = ""
             if name == "s" or name == "t":
                 f_color = "yellow"
-            if self.it_dijkstra.state.node == node:
-                f_color = "green"
             if node.state == NodeState.LABELED:
                 f_color = "cyan"
+            if self.it_dijkstra.state.node == node:
+                f_color = "green"
             elif node.state == NodeState.SCANNED:
                 f_color = "magenta"
             node_elem = self.canvas.create_oval(coords.x - self.node_size, coords.y - self.node_size, coords.x + self.node_size, coords.y + self.node_size, fill=f_color)
