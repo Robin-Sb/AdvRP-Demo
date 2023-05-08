@@ -100,7 +100,7 @@ class Graph:
         self.add_node("K", Node(0.35, 0.45))   #10
         self.add_node("L", Node(0.5, 0.4))     #11
         self.add_node("M", Node(0.25, 0.3))    #12 
-        self.add_node("N", Node(0.6, 0.3))     #13
+        self.add_node("N", Node(0.6, 0.25))     #13
         self.add_node("O", Node(0.7, 0.5))     #14
         self.add_node("P", Node(0.4, 0.2))     #15
         self.add_node("t", Node(0.8, 0.2))
@@ -339,7 +339,7 @@ class DrawHandler:
         b1 = tk.Button(self.window, text = "Dijkstra", command=self.start_dijkstra)
         b2 = tk.Button(self.window, text = "A* Distance", command=self.init_a_star_dist)
         b3  = tk.Button(self.window, text = "A* Landmark", command=self.init_a_star_lm)
-        b1.grid(side=tk.LEFT)
+        b1.pack(side=tk.LEFT)
         b2.pack(side=tk.LEFT)
         b3.pack(side=tk.LEFT)
         self.cost_elements = []
