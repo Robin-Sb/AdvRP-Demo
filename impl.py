@@ -228,7 +228,7 @@ class Graph:
             lm_dists.append(dist[landmark.idx])
         
         for name, node in self.nodes.items():
-            node.potential = lm_dists[node.idx] - lm_dists[self.nodes.get("t").idx] 
+            node.potential = int(lm_dists[node.idx] - lm_dists[self.nodes.get("t").idx])
             start_offset = self.offsets[node.idx]
             if len(self.offsets) > node.idx + 1:
                 end_offset = self.offsets[node.idx + 1]
